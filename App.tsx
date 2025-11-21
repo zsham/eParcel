@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Package, Users, LayoutDashboard, MessageSquare, Settings, 
   LogOut, Bell, Plus, Search, CheckCircle, XCircle, Truck, 
-  BarChart3, BrainCircuit, ChevronRight, Menu, X, Trash2, Eye
+  BarChart3, BrainCircuit, ChevronRight, Menu, X, Trash2, Eye, Loader2
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -10,22 +10,7 @@ import {
 } from 'recharts';
 import { User, UserRole, Parcel, ParcelStatus, Message } from './types';
 import { generateDashboardAnalysis, simulateChatResponse } from './services/geminiService';
-
-// --- Mock Data Initialization ---
-const INITIAL_USERS: User[] = [
-  { id: 'u1', name: 'Admin User', email: 'admin@eparcel.com', role: UserRole.ADMIN, isActive: true, password: 'password' },
-  { id: 'u2', name: 'John Staff', email: 'john@eparcel.com', role: UserRole.STAFF, isActive: true, assignedClients: ['u4'], password: 'password' },
-  { id: 'u3', name: 'Sarah Staff', email: 'sarah@eparcel.com', role: UserRole.STAFF, isActive: false, assignedClients: [], password: 'password' },
-  { id: 'u4', name: 'Client A Corp', email: 'clienta@corp.com', role: UserRole.CLIENT, isActive: true, password: 'password' },
-  { id: 'u5', name: 'Client B Ltd', email: 'clientb@ltd.com', role: UserRole.CLIENT, isActive: true, password: 'password' },
-];
-
-const INITIAL_PARCELS: Parcel[] = [
-  { id: 'p1', trackingNumber: 'EP-8832', sender: 'Warehouse A', clientId: 'u4', description: 'Electronics', status: ParcelStatus.DELIVERED, dateCreated: '2023-10-01', dateUpdated: '2023-10-05', handledBy: 'u2' },
-  { id: 'p2', trackingNumber: 'EP-9941', sender: 'Warehouse B', clientId: 'u4', description: 'Documents', status: ParcelStatus.PENDING, dateCreated: '2023-10-25', dateUpdated: '2023-10-25' },
-  { id: 'p3', trackingNumber: 'EP-1122', sender: 'Supplier X', clientId: 'u5', description: 'Furniture', status: ParcelStatus.IN_TRANSIT, dateCreated: '2023-10-24', dateUpdated: '2023-10-26', handledBy: 'u2' },
-  { id: 'p4', trackingNumber: 'EP-3344', sender: 'Amazon', clientId: 'u4', description: 'Books', status: ParcelStatus.DECLINED, dateCreated: '2023-10-20', dateUpdated: '2023-10-21', handledBy: 'u3' },
-];
+import { api } from './services/api';
 
 // --- Shared Components ---
 
@@ -52,7 +37,7 @@ const Badge = ({ status }: { status: string }) => {
   );
 };
 
-// --- Sub-components (Extracted to fix re-rendering issues) ---
+// --- Sub-components ---
 
 interface LoginScreenProps {
   authMode: 'login' | 'register' | 'forgot';
@@ -64,11 +49,12 @@ interface LoginScreenProps {
   handleLogin: (e: React.FormEvent) => void;
   handleRegister: (e: React.FormEvent) => void;
   error: string;
+  isLoading: boolean;
 }
 
 const LoginScreen = ({ 
   authMode, setAuthMode, email, setEmail, password, setPassword, 
-  handleLogin, handleRegister, error 
+  handleLogin, handleRegister, error, isLoading
 }: LoginScreenProps) => (
   <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
     <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
@@ -78,6 +64,7 @@ const LoginScreen = ({
         </div>
         <h1 className="text-2xl font-bold text-slate-900">eParcel System</h1>
         <p className="text-slate-500 mt-2">Logistics Management Platform</p>
+        <p className="text-xs text-emerald-600 mt-1 font-mono">Connected to: Localhost API</p>
       </div>
 
       {error && (
@@ -97,6 +84,7 @@ const LoginScreen = ({
               placeholder="user@eparcel.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
+              disabled={isLoading}
             />
           </div>
           <div>
@@ -108,10 +96,15 @@ const LoginScreen = ({
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
+              disabled={isLoading}
             />
           </div>
-          <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition-colors shadow-md shadow-indigo-200">
-            Sign In
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition-colors shadow-md shadow-indigo-200 flex justify-center items-center"
+          >
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
           </button>
           <div className="flex justify-between text-sm mt-4">
             <button type="button" onClick={() => setAuthMode('forgot')} className="text-slate-500 hover:text-indigo-600">Forgot Password?</button>
@@ -130,8 +123,8 @@ const LoginScreen = ({
             <label className="block text-sm font-medium text-slate-700 mb-1">Set Password</label>
             <input type="password" required className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={password} onChange={e => setPassword(e.target.value)} />
           </div>
-          <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition-colors">
-            Register as Client
+          <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition-colors flex justify-center">
+             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Register as Client'}
           </button>
           <button type="button" onClick={() => setAuthMode('login')} className="w-full text-slate-500 text-sm hover:text-slate-700">
             Back to Login
@@ -176,7 +169,6 @@ const DashboardStats = ({ parcels, users, currentUser, aiAnalysis, isLoadingAi, 
 
   return (
     <div className="space-y-6">
-      {/* Top Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="border-l-4 border-l-indigo-500">
           <h3 className="text-slate-500 text-sm font-medium">Total Parcels</h3>
@@ -198,7 +190,6 @@ const DashboardStats = ({ parcels, users, currentUser, aiAnalysis, isLoadingAi, 
         )}
       </div>
 
-      {/* AI Insight Section */}
       <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl border border-indigo-100">
           <div className="flex justify-between items-start">
             <div className="flex items-center gap-2 mb-2">
@@ -218,7 +209,6 @@ const DashboardStats = ({ parcels, users, currentUser, aiAnalysis, isLoadingAi, 
           </p>
       </div>
 
-      {/* Charts Area */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <h3 className="text-lg font-semibold text-slate-800 mb-4">Parcel Status Distribution</h3>
@@ -243,7 +233,7 @@ const DashboardStats = ({ parcels, users, currentUser, aiAnalysis, isLoadingAi, 
           </div>
         </Card>
         <Card>
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Monthly Activity (Simulated)</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Monthly Activity</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
@@ -267,30 +257,41 @@ const DashboardStats = ({ parcels, users, currentUser, aiAnalysis, isLoadingAi, 
 const ManageUsers = ({ users, setUsers, targetRole }: any) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '' });
+  const [isLoading, setIsLoading] = useState(false);
   
   const targetUsers = users.filter((u: User) => u.role === targetRole);
 
-  const toggleUserStatus = (id: string) => {
+  const toggleUserStatus = async (id: string, currentStatus: boolean) => {
+    await api.users.toggleStatus(id, !currentStatus);
+    // Optimistic Update
     setUsers(users.map((u: User) => u.id === id ? { ...u, isActive: !u.isActive } : u));
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.name || !newUser.email || !newUser.password) return;
-
-    const user: User = {
-      id: `u${Date.now()}`,
-      name: newUser.name,
-      email: newUser.email,
-      role: targetRole,
-      isActive: true,
-      password: newUser.password,
-      assignedClients: []
-    };
-
-    setUsers([...users, user]);
-    setIsModalOpen(false);
-    setNewUser({ name: '', email: '', password: '' });
+    
+    setIsLoading(true);
+    try {
+      const user: User = {
+        id: `temp-${Date.now()}`, // Will be replaced by backend ID usually
+        name: newUser.name,
+        email: newUser.email,
+        role: targetRole,
+        isActive: true,
+        password: newUser.password,
+        assignedClients: []
+      };
+      
+      const createdUser = await api.users.create(user);
+      setUsers([...users, createdUser]);
+      setIsModalOpen(false);
+      setNewUser({ name: '', email: '', password: '' });
+    } catch (err) {
+      alert('Failed to create user');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -325,7 +326,7 @@ const ManageUsers = ({ users, setUsers, targetRole }: any) => {
                   </td>
                   <td className="py-4 text-right">
                     <button 
-                      onClick={() => toggleUserStatus(user.id)}
+                      onClick={() => toggleUserStatus(user.id, user.isActive)}
                       className={`text-sm px-3 py-1 rounded-md transition ${user.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
                     >
                       {user.isActive ? 'Deactivate' : 'Approve/Activate'}
@@ -343,7 +344,6 @@ const ManageUsers = ({ users, setUsers, targetRole }: any) => {
         </div>
       </Card>
 
-      {/* Add User Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
@@ -398,9 +398,10 @@ const ManageUsers = ({ users, setUsers, targetRole }: any) => {
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex justify-center"
                 >
-                  Create User
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create User'}
                 </button>
               </div>
             </form>
@@ -416,6 +417,7 @@ const ParcelList = ({ parcels, setParcels, currentUser, users }: any) => {
   const [selectedParcel, setSelectedParcel] = useState<Parcel | null>(null);
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   
   const [newParcel, setNewParcel] = useState({
     trackingNumber: '',
@@ -425,57 +427,54 @@ const ParcelList = ({ parcels, setParcels, currentUser, users }: any) => {
   });
 
   const visibleParcels = parcels.filter((p: Parcel) => {
-    // 1. Role Permission Filter
-    if (currentUser?.role === UserRole.CLIENT && p.clientId !== currentUser.id) {
-      return false;
-    }
-    // Admin and Staff can see all (or assigned clients logic can go here, but keeping simple for now as per instructions)
-
-    // 2. Status Dropdown Filter
-    if (filterStatus !== 'All' && p.status !== filterStatus) {
-      return false;
-    }
-
-    // 3. Search Query Filter
-    if (searchQuery && !p.trackingNumber.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
-
+    if (currentUser?.role === UserRole.CLIENT && p.clientId !== currentUser.id) return false;
+    if (filterStatus !== 'All' && p.status !== filterStatus) return false;
+    if (searchQuery && !p.trackingNumber.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
   const clients = users ? users.filter((u: User) => u.role === UserRole.CLIENT) : [];
 
-  const handleUpdateStatus = (id: string, newStatus: ParcelStatus) => {
+  const handleUpdateStatus = async (id: string, newStatus: ParcelStatus) => {
+    await api.parcels.updateStatus(id, newStatus);
     setParcels(parcels.map((p: Parcel) => 
       p.id === id ? { ...p, status: newStatus, dateUpdated: new Date().toISOString().split('T')[0] } : p
     ));
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this parcel record?')) {
+      await api.parcels.delete(id);
       setParcels(parcels.filter((p: Parcel) => p.id !== id));
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newParcel.trackingNumber || !newParcel.clientId) return;
+    setIsLoading(true);
 
-    const parcel: Parcel = {
-      id: `p${Date.now()}`,
-      trackingNumber: newParcel.trackingNumber,
-      sender: newParcel.sender,
-      clientId: newParcel.clientId,
-      description: newParcel.description,
-      status: ParcelStatus.PENDING,
-      dateCreated: new Date().toISOString().split('T')[0],
-      dateUpdated: new Date().toISOString().split('T')[0],
-      handledBy: currentUser.id
-    };
-    setParcels([parcel, ...parcels]);
-    setIsModalOpen(false);
-    setNewParcel({ trackingNumber: '', sender: '', clientId: '', description: '' });
+    try {
+      const parcelData: Parcel = {
+        id: `p${Date.now()}`,
+        trackingNumber: newParcel.trackingNumber,
+        sender: newParcel.sender,
+        clientId: newParcel.clientId,
+        description: newParcel.description,
+        status: ParcelStatus.PENDING,
+        dateCreated: new Date().toISOString().split('T')[0],
+        dateUpdated: new Date().toISOString().split('T')[0],
+        handledBy: currentUser.id
+      };
+      const createdParcel = await api.parcels.create(parcelData);
+      setParcels([createdParcel, ...parcels]);
+      setIsModalOpen(false);
+      setNewParcel({ trackingNumber: '', sender: '', clientId: '', description: '' });
+    } catch (err) {
+      alert("Error creating parcel");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -533,65 +532,24 @@ const ParcelList = ({ parcels, setParcels, currentUser, users }: any) => {
                   <td className="py-4"><Badge status={parcel.status} /></td>
                   <td className="py-4 text-slate-500 text-sm">{parcel.dateUpdated}</td>
                   <td className="py-4 text-right flex justify-end gap-2">
-                    {/* Staff Actions */}
                     {currentUser?.role === UserRole.STAFF && (
                       <>
-                        <button 
-                          onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.ACCEPTED)}
-                          title="Accept / In Transit" 
-                          className="p-1.5 text-emerald-600 bg-emerald-50 rounded hover:bg-emerald-100 transition"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DECLINED)}
-                          title="Decline" 
-                          className="p-1.5 text-amber-600 bg-amber-50 rounded hover:bg-amber-100 transition"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(parcel.id)}
-                          title="Delete" 
-                          className="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100 transition"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <button onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.ACCEPTED)} className="p-1.5 text-emerald-600 bg-emerald-50 rounded hover:bg-emerald-100 transition"><CheckCircle className="w-4 h-4" /></button>
+                        <button onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DECLINED)} className="p-1.5 text-amber-600 bg-amber-50 rounded hover:bg-amber-100 transition"><XCircle className="w-4 h-4" /></button>
+                        <button onClick={() => handleDelete(parcel.id)} className="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100 transition"><Trash2 className="w-4 h-4" /></button>
                       </>
                     )}
-
-                    {/* Client Actions */}
                     {currentUser?.role === UserRole.CLIENT && (
                       <>
                         {parcel.status !== ParcelStatus.DELIVERED && parcel.status !== ParcelStatus.DECLINED && (
                           <>
-                            <button 
-                              onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DELIVERED)}
-                              title="Confirm Receipt (Delivered)" 
-                              className="p-1.5 text-emerald-600 bg-emerald-50 rounded hover:bg-emerald-100 transition"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DECLINED)}
-                              title="Refuse Parcel" 
-                              className="p-1.5 text-amber-600 bg-amber-50 rounded hover:bg-amber-100 transition"
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </button>
+                            <button onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DELIVERED)} className="p-1.5 text-emerald-600 bg-emerald-50 rounded hover:bg-emerald-100 transition"><CheckCircle className="w-4 h-4" /></button>
+                            <button onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DECLINED)} className="p-1.5 text-amber-600 bg-amber-50 rounded hover:bg-amber-100 transition"><XCircle className="w-4 h-4" /></button>
                           </>
                         )}
                       </>
                     )}
-
-                     {/* Common View Details */}
-                     <button 
-                      onClick={() => setSelectedParcel(parcel)}
-                      className="text-slate-400 hover:text-indigo-600 p-1.5"
-                      title="View Details"
-                     >
-                       <Eye className="w-5 h-5" />
-                     </button>
+                     <button onClick={() => setSelectedParcel(parcel)} className="text-slate-400 hover:text-indigo-600 p-1.5" title="View Details"><Eye className="w-5 h-5" /></button>
                   </td>
                 </tr>
               ))}
@@ -605,62 +563,28 @@ const ParcelList = ({ parcels, setParcels, currentUser, users }: any) => {
         </div>
       </Card>
 
-      {/* Register Parcel Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
-            <button 
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             <h3 className="text-xl font-bold text-slate-800 mb-1">Register New Parcel</h3>
             <p className="text-slate-500 text-sm mb-6">Enter the details to create a new parcel record.</p>
-            
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tracking Number</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="e.g. EP-1001"
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={newParcel.trackingNumber}
-                  onChange={e => setNewParcel({...newParcel, trackingNumber: e.target.value})}
-                />
+                <input type="text" required placeholder="e.g. EP-1001" className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none" value={newParcel.trackingNumber} onChange={e => setNewParcel({...newParcel, trackingNumber: e.target.value})} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="e.g. Office Supplies"
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={newParcel.description}
-                  onChange={e => setNewParcel({...newParcel, description: e.target.value})}
-                />
+                <input type="text" required placeholder="e.g. Office Supplies" className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none" value={newParcel.description} onChange={e => setNewParcel({...newParcel, description: e.target.value})} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Sender</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="e.g. Amazon"
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={newParcel.sender}
-                  onChange={e => setNewParcel({...newParcel, sender: e.target.value})}
-                />
+                <input type="text" required placeholder="e.g. Amazon" className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none" value={newParcel.sender} onChange={e => setNewParcel({...newParcel, sender: e.target.value})} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Assign to Client</label>
-                <select 
-                  required
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={newParcel.clientId}
-                  onChange={e => setNewParcel({...newParcel, clientId: e.target.value})}
-                >
+                <select required className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none" value={newParcel.clientId} onChange={e => setNewParcel({...newParcel, clientId: e.target.value})}>
                   <option value="">Select a Client</option>
                   {clients.map((client: User) => (
                     <option key={client.id} value={client.id}>{client.name} ({client.email})</option>
@@ -668,78 +592,32 @@ const ParcelList = ({ parcels, setParcels, currentUser, users }: any) => {
                 </select>
               </div>
               <div className="pt-2 flex gap-3">
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
-                >
-                  Register
-                </button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
+                <button type="submit" disabled={isLoading} className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition flex justify-center">{isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Register'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      {/* View Details Modal */}
+      
+      {/* View Details Modal (Same as before) */}
       {selectedParcel && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative">
-            <button 
-              onClick={() => setSelectedParcel(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            
+            <button onClick={() => setSelectedParcel(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             <div className="mb-6">
                <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-semibold tracking-wide">PARCEL DETAILS</span>
                <h3 className="text-2xl font-bold text-slate-800 mt-2">{selectedParcel.trackingNumber}</h3>
-               <div className="mt-2 flex items-center gap-2">
-                 <span className="text-slate-500 text-sm">Current Status:</span>
-                 <Badge status={selectedParcel.status} />
-               </div>
+               <div className="mt-2 flex items-center gap-2"><span className="text-slate-500 text-sm">Current Status:</span><Badge status={selectedParcel.status} /></div>
             </div>
-            
             <div className="space-y-4 bg-slate-50 p-4 rounded-lg border border-slate-100 mb-6">
-              <div className="flex justify-between">
-                <span className="text-slate-500 text-sm">Description</span>
-                <span className="text-slate-800 font-medium text-sm">{selectedParcel.description}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 text-sm">Sender</span>
-                <span className="text-slate-800 font-medium text-sm">{selectedParcel.sender}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 text-sm">Date Created</span>
-                <span className="text-slate-800 font-medium text-sm">{selectedParcel.dateCreated}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 text-sm">Last Updated</span>
-                <span className="text-slate-800 font-medium text-sm">{selectedParcel.dateUpdated}</span>
-              </div>
-              {selectedParcel.handledBy && (
-                 <div className="flex justify-between">
-                 <span className="text-slate-500 text-sm">Handled By Staff ID</span>
-                 <span className="text-slate-800 font-medium text-sm">{selectedParcel.handledBy}</span>
-               </div>
-              )}
+              <div className="flex justify-between"><span className="text-slate-500 text-sm">Description</span><span className="text-slate-800 font-medium text-sm">{selectedParcel.description}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500 text-sm">Sender</span><span className="text-slate-800 font-medium text-sm">{selectedParcel.sender}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500 text-sm">Date Created</span><span className="text-slate-800 font-medium text-sm">{selectedParcel.dateCreated}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500 text-sm">Last Updated</span><span className="text-slate-800 font-medium text-sm">{selectedParcel.dateUpdated}</span></div>
+              {selectedParcel.handledBy && (<div className="flex justify-between"><span className="text-slate-500 text-sm">Handled By Staff ID</span><span className="text-slate-800 font-medium text-sm">{selectedParcel.handledBy}</span></div>)}
             </div>
-
-            <div className="flex justify-end">
-              <button 
-                onClick={() => setSelectedParcel(null)}
-                className="px-6 py-2 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-900 transition"
-              >
-                Close
-              </button>
-            </div>
+            <div className="flex justify-end"><button onClick={() => setSelectedParcel(null)} className="px-6 py-2 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-900 transition">Close</button></div>
           </div>
         </div>
       )}
@@ -761,7 +639,6 @@ const ChatSystem = ({ currentUser }: any) => {
     setChatHistory(prev => [...prev, { text: userMsg, sender: 'me' }]);
     setInput('');
 
-    // Simulate AI reply
     const aiReply = await simulateChatResponse(
       userMsg, 
       currentUser?.role || 'GUEST', 
@@ -787,16 +664,8 @@ const ChatSystem = ({ currentUser }: any) => {
         ))}
       </div>
       <form onSubmit={handleSend} className="relative">
-        <input 
-          type="text" 
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..." 
-          className="w-full bg-slate-50 border border-slate-200 rounded-full py-3 pl-5 pr-12 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-        />
-        <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition">
-          <MessageSquare className="w-4 h-4" />
-        </button>
+        <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your message..." className="w-full bg-slate-50 border border-slate-200 rounded-full py-3 pl-5 pr-12 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+        <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition"><MessageSquare className="w-4 h-4" /></button>
       </form>
     </Card>
   );
@@ -807,54 +676,77 @@ const ChatSystem = ({ currentUser }: any) => {
 export default function App() {
   // Global State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [parcels, setParcels] = useState<Parcel[]>(INITIAL_PARCELS);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [parcels, setParcels] = useState<Parcel[]>([]);
   
   // UI State
   const [activeView, setActiveView] = useState<string>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [isAppLoading, setIsAppLoading] = useState(true);
 
   // Auth Form State
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // Load Data on Mount (from API or Mock)
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [usersData, parcelsData] = await Promise.all([
+          api.users.getAll(),
+          api.parcels.getAll()
+        ]);
+        setUsers(usersData);
+        setParcels(parcelsData);
+      } catch (e) {
+        console.error("Failed to load data", e);
+      } finally {
+        setIsAppLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   // --- Actions ---
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => u.email === email && u.password === password);
-    if (user) {
-      if (!user.isActive) {
-        setError("Account is inactive. Contact Admin.");
-        return;
-      }
+    setAuthLoading(true);
+    try {
+      const user = await api.auth.login(email, password);
       setCurrentUser(user);
       setActiveView('dashboard');
       setError('');
       setAiAnalysis(''); 
-    } else {
-      setError("Invalid credentials");
+    } catch (err: any) {
+      setError(err.message || "Invalid credentials");
+    } finally {
+      setAuthLoading(false);
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newUser: User = {
-      id: `u${Date.now()}`,
-      name: email.split('@')[0],
-      email,
-      role: UserRole.CLIENT, // Only clients register externally
-      isActive: false, // Requires approval
-      password
-    };
-    setUsers([...users, newUser]);
-    alert("Registration successful! Please wait for Administrator approval.");
-    setAuthMode('login');
+    setAuthLoading(true);
+    try {
+      await api.auth.register({
+        name: email.split('@')[0],
+        email,
+        role: UserRole.CLIENT,
+        password
+      });
+      alert("Registration successful! Please wait for Administrator approval.");
+      setAuthMode('login');
+    } catch (err) {
+      setError("Registration failed.");
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -868,7 +760,6 @@ export default function App() {
     if (!currentUser) return;
     setIsLoadingAi(true);
     
-    // Calculate stats for AI
     const stats = {
       totalParcels: parcels.length,
       delivered: parcels.filter(p => p.status === ParcelStatus.DELIVERED).length,
@@ -881,7 +772,9 @@ export default function App() {
     setIsLoadingAi(false);
   };
 
-  // --- Main Layout ---
+  if (isAppLoading) {
+    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 text-indigo-600 animate-spin" /></div>;
+  }
 
   if (!currentUser) {
     return (
@@ -895,6 +788,7 @@ export default function App() {
         handleLogin={handleLogin}
         handleRegister={handleRegister}
         error={error}
+        isLoading={authLoading}
       />
     );
   }
@@ -915,12 +809,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-30 w-64 bg-white border-r border-slate-200 transform transition-transform duration-200 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="p-6">
           <div className="flex items-center gap-3 text-indigo-600 font-bold text-xl">
@@ -934,7 +826,6 @@ export default function App() {
         <div className="px-4 space-y-1">
           <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
           
-          {/* Admin Menus */}
           {currentUser.role === UserRole.ADMIN && (
             <>
               <NavItem id="staff" icon={Users} label="Staff Settings" />
@@ -943,7 +834,6 @@ export default function App() {
             </>
           )}
 
-          {/* Staff Menus */}
           {currentUser.role === UserRole.STAFF && (
             <>
               <NavItem id="parcels" icon={Package} label="Parcel Set" />
@@ -952,7 +842,6 @@ export default function App() {
             </>
           )}
 
-          {/* Client Menus */}
           {currentUser.role === UserRole.CLIENT && (
             <>
               <NavItem id="my-parcels" icon={Package} label="My Parcels" />
@@ -969,9 +858,7 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
         <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
           <button className="lg:hidden text-slate-500" onClick={() => setIsMobileMenuOpen(true)}>
             <Menu className="w-6 h-6" />
@@ -998,7 +885,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* Page Content Scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {activeView === 'dashboard' && (
