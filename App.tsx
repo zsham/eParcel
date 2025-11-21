@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   Package, Users, LayoutDashboard, MessageSquare, Settings, 
   LogOut, Bell, Plus, Search, CheckCircle, XCircle, Truck, 
-  BarChart3, BrainCircuit, ChevronRight, Menu, X
+  BarChart3, BrainCircuit, ChevronRight, Menu, X, Trash2, Eye
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -411,68 +411,339 @@ const ManageUsers = ({ users, setUsers, targetRole }: any) => {
   );
 };
 
-const ParcelList = ({ parcels, currentUser }: any) => {
-  const visibleParcels = parcels.filter((p: Parcel) => {
-    if (currentUser?.role === UserRole.ADMIN) return true;
-    if (currentUser?.role === UserRole.STAFF) return true;
-    if (currentUser?.role === UserRole.CLIENT) return p.clientId === currentUser.id;
-    return false;
+const ParcelList = ({ parcels, setParcels, currentUser, users }: any) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedParcel, setSelectedParcel] = useState<Parcel | null>(null);
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const [newParcel, setNewParcel] = useState({
+    trackingNumber: '',
+    sender: '',
+    clientId: '',
+    description: ''
   });
 
+  const visibleParcels = parcels.filter((p: Parcel) => {
+    // 1. Role Permission Filter
+    if (currentUser?.role === UserRole.CLIENT && p.clientId !== currentUser.id) {
+      return false;
+    }
+    // Admin and Staff can see all (or assigned clients logic can go here, but keeping simple for now as per instructions)
+
+    // 2. Status Dropdown Filter
+    if (filterStatus !== 'All' && p.status !== filterStatus) {
+      return false;
+    }
+
+    // 3. Search Query Filter
+    if (searchQuery && !p.trackingNumber.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const clients = users ? users.filter((u: User) => u.role === UserRole.CLIENT) : [];
+
+  const handleUpdateStatus = (id: string, newStatus: ParcelStatus) => {
+    setParcels(parcels.map((p: Parcel) => 
+      p.id === id ? { ...p, status: newStatus, dateUpdated: new Date().toISOString().split('T')[0] } : p
+    ));
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this parcel record?')) {
+      setParcels(parcels.filter((p: Parcel) => p.id !== id));
+    }
+  };
+
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newParcel.trackingNumber || !newParcel.clientId) return;
+
+    const parcel: Parcel = {
+      id: `p${Date.now()}`,
+      trackingNumber: newParcel.trackingNumber,
+      sender: newParcel.sender,
+      clientId: newParcel.clientId,
+      description: newParcel.description,
+      status: ParcelStatus.PENDING,
+      dateCreated: new Date().toISOString().split('T')[0],
+      dateUpdated: new Date().toISOString().split('T')[0],
+      handledBy: currentUser.id
+    };
+    setParcels([parcel, ...parcels]);
+    setIsModalOpen(false);
+    setNewParcel({ trackingNumber: '', sender: '', clientId: '', description: '' });
+  };
+
   return (
-    <Card>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold text-slate-800">Parcel Records</h2>
-        {(currentUser?.role === UserRole.STAFF) && (
-          <button className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition">
-            <Plus className="w-4 h-4" /> Register Parcel
-          </button>
-        )}
-      </div>
-      <div className="flex gap-4 mb-6">
-         <div className="relative flex-1 max-w-sm">
-           <Search className="absolute left-3 top-2.5 text-slate-400 w-4 h-4" />
-           <input type="text" placeholder="Search tracking number..." className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" />
-         </div>
-         <select className="border border-slate-200 rounded-lg px-4 py-2 text-slate-600 outline-none">
-           <option>All Status</option>
-           <option>Delivered</option>
-           <option>Pending</option>
-         </select>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="text-slate-500 text-sm border-b border-slate-100">
-              <th className="py-3 font-medium">Tracking ID</th>
-              <th className="py-3 font-medium">Description</th>
-              <th className="py-3 font-medium">Status</th>
-              <th className="py-3 font-medium">Updated</th>
-              <th className="py-3 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleParcels.map((parcel: Parcel) => (
-              <tr key={parcel.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
-                <td className="py-4 font-mono text-indigo-600 font-medium">{parcel.trackingNumber}</td>
-                <td className="py-4 text-slate-600">{parcel.description}</td>
-                <td className="py-4"><Badge status={parcel.status} /></td>
-                <td className="py-4 text-slate-500 text-sm">{parcel.dateUpdated}</td>
-                <td className="py-4 text-right flex justify-end gap-2">
-                  {currentUser?.role === UserRole.STAFF && (
-                    <>
-                      <button title="Accept" className="p-1.5 text-emerald-600 bg-emerald-50 rounded hover:bg-emerald-100"><CheckCircle className="w-4 h-4" /></button>
-                      <button title="Decline" className="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100"><XCircle className="w-4 h-4" /></button>
-                    </>
-                  )}
-                   <button className="text-slate-400 hover:text-slate-600"><ChevronRight className="w-5 h-5" /></button>
-                </td>
+    <>
+      <Card>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-slate-800">Parcel Records</h2>
+          {(currentUser?.role === UserRole.STAFF) && (
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
+            >
+              <Plus className="w-4 h-4" /> Register Parcel
+            </button>
+          )}
+        </div>
+        <div className="flex gap-4 mb-6">
+           <div className="relative flex-1 max-w-sm">
+             <Search className="absolute left-3 top-2.5 text-slate-400 w-4 h-4" />
+             <input 
+               type="text" 
+               placeholder="Search tracking number..." 
+               className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)} 
+             />
+           </div>
+           <select 
+             className="border border-slate-200 rounded-lg px-4 py-2 text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500"
+             value={filterStatus}
+             onChange={(e) => setFilterStatus(e.target.value)}
+           >
+             <option value="All">All Status</option>
+             {Object.values(ParcelStatus).map((status) => (
+               <option key={status} value={status}>{status}</option>
+             ))}
+           </select>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-slate-500 text-sm border-b border-slate-100">
+                <th className="py-3 font-medium">Tracking ID</th>
+                <th className="py-3 font-medium">Description</th>
+                <th className="py-3 font-medium">Status</th>
+                <th className="py-3 font-medium">Updated</th>
+                <th className="py-3 font-medium text-right">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+            </thead>
+            <tbody>
+              {visibleParcels.map((parcel: Parcel) => (
+                <tr key={parcel.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                  <td className="py-4 font-mono text-indigo-600 font-medium">{parcel.trackingNumber}</td>
+                  <td className="py-4 text-slate-600">{parcel.description}</td>
+                  <td className="py-4"><Badge status={parcel.status} /></td>
+                  <td className="py-4 text-slate-500 text-sm">{parcel.dateUpdated}</td>
+                  <td className="py-4 text-right flex justify-end gap-2">
+                    {/* Staff Actions */}
+                    {currentUser?.role === UserRole.STAFF && (
+                      <>
+                        <button 
+                          onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.ACCEPTED)}
+                          title="Accept / In Transit" 
+                          className="p-1.5 text-emerald-600 bg-emerald-50 rounded hover:bg-emerald-100 transition"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DECLINED)}
+                          title="Decline" 
+                          className="p-1.5 text-amber-600 bg-amber-50 rounded hover:bg-amber-100 transition"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(parcel.id)}
+                          title="Delete" 
+                          className="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100 transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+
+                    {/* Client Actions */}
+                    {currentUser?.role === UserRole.CLIENT && (
+                      <>
+                        {parcel.status !== ParcelStatus.DELIVERED && parcel.status !== ParcelStatus.DECLINED && (
+                          <>
+                            <button 
+                              onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DELIVERED)}
+                              title="Confirm Receipt (Delivered)" 
+                              className="p-1.5 text-emerald-600 bg-emerald-50 rounded hover:bg-emerald-100 transition"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleUpdateStatus(parcel.id, ParcelStatus.DECLINED)}
+                              title="Refuse Parcel" 
+                              className="p-1.5 text-amber-600 bg-amber-50 rounded hover:bg-amber-100 transition"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+
+                     {/* Common View Details */}
+                     <button 
+                      onClick={() => setSelectedParcel(parcel)}
+                      className="text-slate-400 hover:text-indigo-600 p-1.5"
+                      title="View Details"
+                     >
+                       <Eye className="w-5 h-5" />
+                     </button>
+                  </td>
+                </tr>
+              ))}
+              {visibleParcels.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-slate-400">No parcels found matching your filters.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Register Parcel Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+            <button 
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <h3 className="text-xl font-bold text-slate-800 mb-1">Register New Parcel</h3>
+            <p className="text-slate-500 text-sm mb-6">Enter the details to create a new parcel record.</p>
+            
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tracking Number</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="e.g. EP-1001"
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={newParcel.trackingNumber}
+                  onChange={e => setNewParcel({...newParcel, trackingNumber: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="e.g. Office Supplies"
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={newParcel.description}
+                  onChange={e => setNewParcel({...newParcel, description: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Sender</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="e.g. Amazon"
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={newParcel.sender}
+                  onChange={e => setNewParcel({...newParcel, sender: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Assign to Client</label>
+                <select 
+                  required
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={newParcel.clientId}
+                  onChange={e => setNewParcel({...newParcel, clientId: e.target.value})}
+                >
+                  <option value="">Select a Client</option>
+                  {clients.map((client: User) => (
+                    <option key={client.id} value={client.id}>{client.name} ({client.email})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
+                >
+                  Register
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {selectedParcel && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative">
+            <button 
+              onClick={() => setSelectedParcel(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <div className="mb-6">
+               <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-semibold tracking-wide">PARCEL DETAILS</span>
+               <h3 className="text-2xl font-bold text-slate-800 mt-2">{selectedParcel.trackingNumber}</h3>
+               <div className="mt-2 flex items-center gap-2">
+                 <span className="text-slate-500 text-sm">Current Status:</span>
+                 <Badge status={selectedParcel.status} />
+               </div>
+            </div>
+            
+            <div className="space-y-4 bg-slate-50 p-4 rounded-lg border border-slate-100 mb-6">
+              <div className="flex justify-between">
+                <span className="text-slate-500 text-sm">Description</span>
+                <span className="text-slate-800 font-medium text-sm">{selectedParcel.description}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 text-sm">Sender</span>
+                <span className="text-slate-800 font-medium text-sm">{selectedParcel.sender}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 text-sm">Date Created</span>
+                <span className="text-slate-800 font-medium text-sm">{selectedParcel.dateCreated}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 text-sm">Last Updated</span>
+                <span className="text-slate-800 font-medium text-sm">{selectedParcel.dateUpdated}</span>
+              </div>
+              {selectedParcel.handledBy && (
+                 <div className="flex justify-between">
+                 <span className="text-slate-500 text-sm">Handled By Staff ID</span>
+                 <span className="text-slate-800 font-medium text-sm">{selectedParcel.handledBy}</span>
+               </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <button 
+                onClick={() => setSelectedParcel(null)}
+                className="px-6 py-2 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-900 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -757,7 +1028,9 @@ export default function App() {
             {(activeView === 'parcels' || activeView === 'my-parcels' || activeView === 'history') && (
               <ParcelList 
                 parcels={parcels} 
+                setParcels={setParcels}
                 currentUser={currentUser} 
+                users={users}
               />
             )}
             {activeView === 'chat' && (
