@@ -1,0 +1,5 @@
+{
+  "name": "eParcel - Logistics Management System",
+  "description": "A comprehensive React prototype for the eParcel logistics system. Simulates Administrator, Staff, and Client roles with dashboard analytics, parcel tracking, and AI-powered chat assistance using the Gemini API. Note: Backend logic (Laravel/MySQL) is simulated via local state for this prototype.",
+  "requestFramePermissions": []
+}
