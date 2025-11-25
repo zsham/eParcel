@@ -1,8 +1,18 @@
+
 import { User, Parcel, ParcelStatus, UserRole } from '../types';
 
-// CHANGE THIS to your XAMPP/WAMP folder URL
-// Example: If you put files in C:/xampp/htdocs/eparcel_api, use 'http://localhost/eparcel_api'
+// ==========================================
+// CONFIGURATION
+// ==========================================
+
+// SET THIS TO 'true' WHEN RUNNING ON LOCALHOST WITH XAMPP
+// SET THIS TO 'false' WHEN RUNNING IN AI STUDIO OR DEMO MODE
+const USE_LIVE_API = false; 
+
+// Your XAMPP API URL
 const API_URL = 'http://localhost/eparcel_api';
+
+// ==========================================
 
 // --- HELPERS: Map Database (snake_case) to React (camelCase) ---
 
@@ -29,7 +39,7 @@ const mapParcelFromDb = (dbParcel: any): Parcel => ({
   handledBy: dbParcel.handled_by ? dbParcel.handled_by.toString() : undefined
 });
 
-// --- MOCK DATA FALLBACKS (Used if API is offline) ---
+// --- MOCK DATA FALLBACKS (Used if USE_LIVE_API is false) ---
 const MOCK_USERS: User[] = [
   { id: 'u1', name: 'Admin User', email: 'admin@eparcel.com', role: UserRole.ADMIN, isActive: true, password: 'password' },
   { id: 'u2', name: 'John Staff', email: 'john@eparcel.com', role: UserRole.STAFF, isActive: true, assignedClients: ['u4'], password: 'password' },
@@ -45,18 +55,21 @@ const MOCK_PARCELS: Parcel[] = [
   { id: 'p4', trackingNumber: 'EP-3344', sender: 'Amazon', clientId: 'u4', description: 'Books', status: ParcelStatus.DECLINED, dateCreated: '2023-10-20', dateUpdated: '2023-10-21', handledBy: 'u3' },
 ];
 
-// Helper to simulate delay or fetch real data
+// Helper to handle requests
 async function request(endpoint: string, options: RequestInit = {}): Promise<any> {
+  // If Mock Mode is enabled, skip network request
+  if (!USE_LIVE_API) {
+    console.log(`[Mock API] ${options.method || 'GET'} ${endpoint}`);
+    await new Promise(r => setTimeout(r, 600)); // Simulate latency
+    throw new Error("Using Mock Data"); // Throwing error triggers the catch block in specific methods to load mock data
+  }
+
   try {
-    // 1. Prepare Headers (PHP receives JSON)
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    // 2. Make Request
-    // UNCOMMENT to use Real PHP API
-    /*
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
       headers,
@@ -69,117 +82,123 @@ async function request(endpoint: string, options: RequestInit = {}): Promise<any
         return json;
     } catch (e) {
         console.error("Invalid JSON from PHP:", text);
-        throw new Error("Server Error");
+        throw new Error("Server Error or Invalid JSON");
     }
-    */
-
-    // --- MOCK MODE (Remove this block when using real PHP) ---
-    console.log(`[Mock API] ${options.method || 'GET'} ${endpoint}`);
-    await new Promise(r => setTimeout(r, 600)); // Simulate PHP latency
-    throw new Error("Using Mock Data"); 
-    // -------------------------------------------------------
-
   } catch (e) {
-    return null; // Triggers fallback to mock data
+    console.error("API Request Failed:", e);
+    return null; 
   }
 }
 
 export const api = {
   auth: {
     login: async (email: string, password: string) => {
-      // PHP Endpoint: /login.php
-      const data = await request('/login.php', { method: 'POST', body: JSON.stringify({ email, password }) });
-      if (data && data.user) return mapUserFromDb(data.user);
+      if (USE_LIVE_API) {
+        const data = await request('/login.php', { method: 'POST', body: JSON.stringify({ email, password }) });
+        if (data && data.user) return mapUserFromDb(data.user);
+        throw new Error("Invalid credentials from server");
+      }
 
-      // Fallback
+      // Mock Fallback
       const user = MOCK_USERS.find(u => u.email === email && u.password === password);
       if (!user) throw new Error("Invalid credentials");
       if (!user.isActive) throw new Error("Account is inactive. Contact Admin.");
       return user;
     },
     register: async (user: Partial<User>) => {
-      // PHP Endpoint: /register.php
-      await request('/register.php', { 
-        method: 'POST', 
-        body: JSON.stringify({
-          name: user.name,
-          email: user.email,
-          password: user.password,
-          role: 'CLIENT'
-        }) 
-      });
+      if (USE_LIVE_API) {
+        await request('/register.php', { 
+          method: 'POST', 
+          body: JSON.stringify({
+            name: user.name,
+            email: user.email,
+            password: user.password,
+            role: 'CLIENT'
+          }) 
+        });
+        return { ...user, id: 'temp', isActive: false };
+      }
+
+      // Mock Fallback
       return { ...user, id: `u${Date.now()}`, isActive: false };
     }
   },
   
   users: {
     getAll: async () => {
-      // PHP Endpoint: /get_users.php
-      const data = await request('/get_users.php');
-      if (data && Array.isArray(data)) return data.map(mapUserFromDb);
+      if (USE_LIVE_API) {
+        const data = await request('/get_users.php');
+        if (data && Array.isArray(data)) return data.map(mapUserFromDb);
+      }
       return MOCK_USERS;
     },
     create: async (user: User) => {
-      // PHP Endpoint: /create_user.php
-      const dbUser = await request('/create_user.php', { 
-        method: 'POST', 
-        body: JSON.stringify({
-          name: user.name,
-          email: user.email,
-          password: user.password,
-          role: user.role,
-          is_active: user.isActive ? 1 : 0
-        }) 
-      });
-      if (dbUser) return mapUserFromDb(dbUser);
+      if (USE_LIVE_API) {
+        const dbUser = await request('/create_user.php', { 
+          method: 'POST', 
+          body: JSON.stringify({
+            name: user.name,
+            email: user.email,
+            password: user.password,
+            role: user.role,
+            is_active: user.isActive ? 1 : 0
+          }) 
+        });
+        if (dbUser) return mapUserFromDb(dbUser);
+      }
       return user;
     },
     toggleStatus: async (userId: string, isActive: boolean) => {
-      // PHP Endpoint: /update_user_status.php
-      await request('/update_user_status.php', { 
-        method: 'POST', 
-        body: JSON.stringify({ id: userId, is_active: isActive ? 1 : 0 }) 
-      });
+      if (USE_LIVE_API) {
+        await request('/update_user_status.php', { 
+          method: 'POST', 
+          body: JSON.stringify({ id: userId, is_active: isActive ? 1 : 0 }) 
+        });
+      }
       return true;
     }
   },
 
   parcels: {
     getAll: async () => {
-      // PHP Endpoint: /get_parcels.php
-      const data = await request('/get_parcels.php');
-      if (data && Array.isArray(data)) return data.map(mapParcelFromDb);
+      if (USE_LIVE_API) {
+        const data = await request('/get_parcels.php');
+        if (data && Array.isArray(data)) return data.map(mapParcelFromDb);
+      }
       return MOCK_PARCELS;
     },
     create: async (parcel: Parcel) => {
-      // PHP Endpoint: /create_parcel.php
-      const dbParcel = await request('/create_parcel.php', { 
-        method: 'POST', 
-        body: JSON.stringify({
-          tracking_number: parcel.trackingNumber,
-          sender: parcel.sender,
-          client_id: parcel.clientId,
-          description: parcel.description,
-          handled_by: parcel.handledBy
-        }) 
-      });
-      if (dbParcel) return mapParcelFromDb(dbParcel);
+      if (USE_LIVE_API) {
+        const dbParcel = await request('/create_parcel.php', { 
+          method: 'POST', 
+          body: JSON.stringify({
+            tracking_number: parcel.trackingNumber,
+            sender: parcel.sender,
+            client_id: parcel.clientId,
+            description: parcel.description,
+            handled_by: parcel.handledBy
+          }) 
+        });
+        if (dbParcel) return mapParcelFromDb(dbParcel);
+      }
       return parcel;
     },
     updateStatus: async (id: string, status: ParcelStatus) => {
-      // PHP Endpoint: /update_parcel_status.php
-      await request('/update_parcel_status.php', { 
-        method: 'POST', 
-        body: JSON.stringify({ id, status }) 
-      });
+      if (USE_LIVE_API) {
+        await request('/update_parcel_status.php', { 
+          method: 'POST', 
+          body: JSON.stringify({ id, status }) 
+        });
+      }
       return true;
     },
     delete: async (id: string) => {
-      // PHP Endpoint: /delete_parcel.php
-      await request('/delete_parcel.php', { 
-        method: 'POST', 
-        body: JSON.stringify({ id }) 
-      });
+      if (USE_LIVE_API) {
+        await request('/delete_parcel.php', { 
+          method: 'POST', 
+          body: JSON.stringify({ id }) 
+        });
+      }
       return true;
     }
   }
